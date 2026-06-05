@@ -1,7 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../core/services/firestore_service.dart';
-import '../../core/models/transaction.dart';
-import '../auth/providers/auth_provider.dart';
+import 'package:finance_ai/core/services/firestore_service.dart';
+import 'package:finance_ai/core/models/transaction.dart';
+import 'package:finance_ai/features/auth/providers/auth_provider.dart';
 
 final firestoreServiceProvider = Provider<FirestoreService>((ref) {
   return FirestoreService();

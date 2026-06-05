@@ -1,7 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../core/models/portfolio_item.dart';
-import '../home/providers/transaction_provider.dart'; // To get firestoreServiceProvider
-import '../auth/providers/auth_provider.dart';
+import 'package:finance_ai/core/models/portfolio_item.dart';
+import 'package:finance_ai/features/home/providers/transaction_provider.dart'; // To get firestoreServiceProvider
+import 'package:finance_ai/features/auth/providers/auth_provider.dart';
 
 final portfolioProvider = StreamProvider<List<PortfolioItem>>((ref) {
   final user = ref.watch(authStateProvider).value;

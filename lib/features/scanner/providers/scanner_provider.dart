@@ -1,5 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../core/services/ai_scanner_service.dart';
+import 'package:finance_ai/core/services/ai_scanner_service.dart';
 
 // IMPORTANT: Replace this with the actual Gemini API key provided by the user.
 // In a production app, this should be fetched securely from a backend or remote config.

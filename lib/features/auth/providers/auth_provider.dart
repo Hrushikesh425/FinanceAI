@@ -1,5 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../core/services/auth_service.dart';
+import 'package:finance_ai/core/services/auth_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 final authServiceProvider = Provider<AuthService>((ref) {
