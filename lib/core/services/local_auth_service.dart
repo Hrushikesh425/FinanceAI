@@ -19,10 +19,6 @@ class LocalAuthService {
     try {
       return await _auth.authenticate(
         localizedReason: 'Please authenticate to access your financial data',
-        options: const AuthenticationOptions(
-          stickyAuth: true,
-          biometricOnly: false, // fallback to device credentials
-        ),
       );
     } on PlatformException {
       return false;

@@ -5,8 +5,6 @@ import 'package:firebase_core/firebase_core.dart';
 
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  // If you're going to use other Firebase services in the background, such as Firestore,
-  // make sure you call `initializeApp` before using other Firebase services.
   try {
     await Firebase.initializeApp();
   } catch (e) {
@@ -46,7 +44,9 @@ class PushNotificationService {
       iOS: initializationSettingsDarwin,
     );
     
-    await _localNotificationsPlugin.initialize(initializationSettings);
+    await _localNotificationsPlugin.initialize(
+      settings: initializationSettings,
+    );
 
     // 2. Initialize Firebase Messaging (if available)
     if (_messaging != null) {
@@ -97,18 +97,15 @@ class PushNotificationService {
         NotificationDetails(android: androidPlatformChannelSpecifics);
     
     await _localNotificationsPlugin.show(
-      DateTime.now().millisecond,
-      title,
-      body,
-      platformChannelSpecifics,
+      id: DateTime.now().millisecond,
+      title: title,
+      body: body,
+      notificationDetails: platformChannelSpecifics,
     );
   }
 
   // Simulate scheduling a local push notification for a Portfolio reminder
   Future<void> scheduleReminder(String title, String body, DateTime scheduledDate) async {
-    // In a real app, you'd use zonedSchedule with timezone. 
-    // For now, we will just show it immediately for demonstration or push it to the server.
     debugPrint('Scheduled Reminder for $scheduledDate: $title - $body');
-    // await _showLocalNotification(title, body); // For testing immediately
   }
 }
