@@ -10,7 +10,7 @@ import 'package:finance_ai/core/widgets/glass_container.dart';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:finance_ai/core/models/portfolio_item.dart';
-import '../providers/portfolio_provider.dart';
+import 'package:finance_ai/features/portfolio/providers/portfolio_provider.dart';
 
 class PortfolioScreen extends ConsumerStatefulWidget {
   const PortfolioScreen({super.key});

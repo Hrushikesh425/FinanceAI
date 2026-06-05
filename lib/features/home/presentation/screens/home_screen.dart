@@ -11,9 +11,9 @@ import 'package:finance_ai/core/widgets/compact_card.dart';
 import 'package:finance_ai/core/widgets/glass_container.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:finance_ai/core/models/transaction.dart';
-import '../providers/transaction_provider.dart';
-import '../widgets/monthly_summary.dart';
-import '../widgets/quick_actions.dart';
+import 'package:finance_ai/features/home/providers/transaction_provider.dart';
+import 'package:finance_ai/features/home/presentation/widgets/monthly_summary.dart';
+import 'package:finance_ai/features/home/presentation/widgets/quick_actions.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});

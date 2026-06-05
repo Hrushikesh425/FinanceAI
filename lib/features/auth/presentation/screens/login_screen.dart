@@ -8,7 +8,7 @@ import 'package:finance_ai/core/constants/app_text_styles.dart';
 import 'package:finance_ai/core/widgets/glass_container.dart';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../auth/providers/auth_provider.dart';
+import 'package:finance_ai/features/auth/providers/auth_provider.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});

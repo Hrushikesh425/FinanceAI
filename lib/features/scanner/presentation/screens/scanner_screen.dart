@@ -9,9 +9,9 @@ import 'package:finance_ai/core/widgets/glass_container.dart';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:finance_ai/core/models/transaction.dart';
-import '../../auth/providers/auth_provider.dart';
-import '../../home/providers/transaction_provider.dart';
-import '../providers/scanner_provider.dart';
+import 'package:finance_ai/features/auth/providers/auth_provider.dart';
+import 'package:finance_ai/features/home/providers/transaction_provider.dart';
+import 'package:finance_ai/features/scanner/providers/scanner_provider.dart';
 
 class ScannerScreen extends ConsumerStatefulWidget {
   const ScannerScreen({super.key});

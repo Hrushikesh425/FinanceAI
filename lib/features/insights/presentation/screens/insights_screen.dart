@@ -7,7 +7,7 @@ import 'package:finance_ai/core/constants/app_text_styles.dart';
 import 'package:finance_ai/core/widgets/glass_container.dart';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../home/providers/transaction_provider.dart';
+import 'package:finance_ai/features/home/providers/transaction_provider.dart';
 
 class InsightsScreen extends ConsumerWidget {
   const InsightsScreen({super.key});
