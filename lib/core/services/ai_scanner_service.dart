@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'package:google_generative_ai/google_generative_ai.dart';
 import 'package:flutter/foundation.dart';
-import '../../models/transaction.dart';
+import 'package:finance_ai/core/models/transaction.dart';
 
 class AIScannerService {
   final GenerativeModel _model;
