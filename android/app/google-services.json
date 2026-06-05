@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "261428734013",
+    "project_id": "financeai-c99e5",
+    "storage_bucket": "financeai-c99e5.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:261428734013:android:8f649b5f3e9b6bf8f6a254",
+        "android_client_info": {
+          "package_name": "com.hrushikesh.financeai"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAXREAMIE4Ocso4vZlQrhkNrU6sJpsJ3LE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:261428734013:android:c4f978280e9d1c05f6a254",
+        "android_client_info": {
+          "package_name": "com.hrushikesh.finannceai"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAXREAMIE4Ocso4vZlQrhkNrU6sJpsJ3LE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
