@@ -48,7 +48,18 @@ class _SmsImportBannerState extends ConsumerState<SmsImportBanner> {
       final addTx = ref.read(addTransactionProvider);
       for (final tx in _pendingTransactions) {
         // give each a unique ID so they don't overwrite if timestamps match exactly
-        final newTx = tx.copyWith(id: '${tx.id}_${DateTime.now().microsecondsSinceEpoch}');
+        final newTx = AppTransaction(
+          id: '${tx.id}_${DateTime.now().microsecondsSinceEpoch}',
+          userId: tx.userId,
+          title: tx.title,
+          subtitle: tx.subtitle,
+          amount: tx.amount,
+          type: tx.type,
+          category: tx.category,
+          date: tx.date,
+          paymentMethod: tx.paymentMethod,
+          receiptImageUrl: tx.receiptImageUrl,
+        );
         await addTx(newTx);
       }
       

@@ -9,7 +9,7 @@ import 'package:finance_ai/core/widgets/glass_container.dart';
 import 'package:finance_ai/core/models/portfolio_item.dart';
 import 'package:finance_ai/features/portfolio/providers/portfolio_provider.dart';
 import 'package:finance_ai/features/auth/providers/auth_provider.dart';
-import 'package:finance_ai/core/services/firestore_service.dart';
+import 'package:finance_ai/features/home/providers/transaction_provider.dart';
 import 'package:intl/intl.dart';
 
 class PortfolioScreen extends ConsumerWidget {

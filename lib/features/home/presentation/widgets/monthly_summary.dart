@@ -67,7 +67,7 @@ class MonthlySummary extends ConsumerWidget {
                 ),
               ]),
               const SizedBox(height: AppDimensions.sm),
-              AnimatedCounter(value: balance.abs().toInt(), prefix: balance >= 0 ? '₹' : '-₹'),
+              AnimatedCounter(value: balance.abs().toDouble(), prefix: balance >= 0 ? '₹' : '-₹'),
               const SizedBox(height: AppDimensions.lg),
               Row(children: [
                 _buildMiniStat('Income', _formatCompact(income), AppColors.income),

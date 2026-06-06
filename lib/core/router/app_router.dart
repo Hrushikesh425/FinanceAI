@@ -159,9 +159,8 @@ final appRouter = GoRouter(
       path: '/portfolio/add',
       parentNavigatorKey: _rootNavigatorKey,
       pageBuilder: (context, state) {
-        final type = state.uri.queryParameters['type'] ?? 'investment';
         return CustomTransitionPage(
-          child: AddPortfolioItemScreen(type: type),
+          child: const AddPortfolioItemScreen(),
           transitionsBuilder: (context, animation, secondaryAnimation, child) {
             return SlideTransition(
               position: Tween(

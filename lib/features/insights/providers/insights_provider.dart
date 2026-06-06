@@ -60,8 +60,11 @@ class MonthlyStats {
 }
 
 final currentMonthStatsProvider = StreamProvider<MonthlyStats>((ref) {
-  final txStream = ref.watch(transactionsProvider.future).asStream();
-  return ref.watch(transactionsProvider.stream).map((transactions) {
+  final user = ref.watch(authStateProvider).value;
+  if (user == null) return Stream.value(MonthlyStats.empty());
+
+  final firestoreService = ref.watch(firestoreServiceProvider);
+  return firestoreService.getTransactions(user.uid).map((transactions) {
     final now = DateTime.now();
     final thisMonth = transactions.where((tx) =>
         tx.date.year == now.year && tx.date.month == now.month).toList();
