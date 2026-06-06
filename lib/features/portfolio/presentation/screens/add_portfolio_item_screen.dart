@@ -1,40 +1,103 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:flutter_animate/flutter_animate.dart';
+import 'package:intl/intl.dart';
 import 'package:finance_ai/core/constants/app_colors.dart';
 import 'package:finance_ai/core/constants/app_dimensions.dart';
 import 'package:finance_ai/core/constants/app_text_styles.dart';
+import 'package:finance_ai/core/widgets/glass_container.dart';
+import 'package:finance_ai/core/models/portfolio_item.dart';
+import 'package:finance_ai/features/portfolio/providers/portfolio_provider.dart';
+import 'package:finance_ai/core/services/push_notification_service.dart';
 
-class AddPortfolioItemScreen extends StatefulWidget {
-  final String type; // 'investment', 'debt', 'asset', 'policy'
-
-  const AddPortfolioItemScreen({super.key, required this.type});
-
+class AddPortfolioItemScreen extends ConsumerStatefulWidget {
+  const AddPortfolioItemScreen({super.key});
   @override
-  State<AddPortfolioItemScreen> createState() => _AddPortfolioItemScreenState();
+  ConsumerState<AddPortfolioItemScreen> createState() => _AddPortfolioItemScreenState();
 }
 
-class _AddPortfolioItemScreenState extends State<AddPortfolioItemScreen> {
-  final _formKey = GlobalKey<FormState>();
+class _AddPortfolioItemScreenState extends ConsumerState<AddPortfolioItemScreen> {
+  PortfolioType _selectedType = PortfolioType.investment;
+  final _nameController = TextEditingController();
+  final _amountController = TextEditingController();
+  final _interestRateController = TextEditingController();
+  DateTime _nextPaymentDate = DateTime.now().add(const Duration(days: 30));
+  bool _enableReminder = false;
+  int _reminderDaysBefore = 1;
+  bool _isSaving = false;
 
-  String get _title {
-    switch (widget.type) {
-      case 'investment': return 'Add Investment';
-      case 'debt': return 'Add Debt Given';
-      case 'asset': return 'Add Purchased Asset';
-      case 'policy': return 'Add Policy';
-      default: return 'Add Portfolio Item';
-    }
+  final _types = [
+    (PortfolioType.investment, 'Investment', Icons.trending_up_rounded, AppColors.primary),
+    (PortfolioType.debt, 'Debt / EMI', Icons.money_off_rounded, AppColors.warning),
+    (PortfolioType.asset, 'Asset', Icons.home_work_rounded, AppColors.accent),
+  ];
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _amountController.dispose();
+    _interestRateController.dispose();
+    super.dispose();
   }
 
-  Color get _themeColor {
-    switch (widget.type) {
-      case 'investment': return AppColors.primary;
-      case 'debt': return AppColors.warning;
-      case 'asset': return AppColors.accent;
-      case 'policy': return AppColors.catInvestment;
-      default: return AppColors.primary;
+  Future<void> _pickDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _nextPaymentDate,
+      firstDate: DateTime.now(),
+      lastDate: DateTime.now().add(const Duration(days: 365 * 10)),
+    );
+    if (picked != null) setState(() => _nextPaymentDate = picked);
+  }
+
+  Future<void> _save() async {
+    final amountText = _amountController.text.trim();
+    if (_nameController.text.trim().isEmpty || amountText.isEmpty || double.tryParse(amountText) == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please enter valid name and amount')));
+      return;
+    }
+
+    setState(() => _isSaving = true);
+    HapticFeedback.mediumImpact();
+
+    try {
+      final amount = double.parse(amountText);
+      final rateText = _interestRateController.text.trim();
+      final rate = rateText.isNotEmpty ? double.tryParse(rateText) : null;
+
+      final item = PortfolioItem(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        name: _nameController.text.trim(),
+        type: _selectedType,
+        amount: amount,
+        interestRate: rate,
+        nextPaymentDate: (_selectedType == PortfolioType.debt || _selectedType == PortfolioType.investment) ? _nextPaymentDate : null,
+        reminderDaysBefore: _enableReminder ? _reminderDaysBefore : null,
+      );
+
+      final addFn = ref.read(addPortfolioItemProvider);
+      await addFn(item);
+      
+      // Schedule Reminder
+      if (_enableReminder && item.nextPaymentDate != null) {
+        final reminderDate = item.nextPaymentDate!.subtract(Duration(days: _reminderDaysBefore));
+        // Schedule it for 10 AM on the reminder day
+        final scheduledTime = DateTime(reminderDate.year, reminderDate.month, reminderDate.day, 10, 0);
+        
+        await pushNotificationService.scheduleReminder(
+          id: item.id.hashCode,
+          title: '${_selectedType == PortfolioType.debt ? 'Payment Due:' : 'Investment Reminder:'} ${item.name}',
+          body: 'Amount: ₹${item.amount.toStringAsFixed(0)} is due in $_reminderDaysBefore days.',
+          scheduledDate: scheduledTime,
+        );
+      }
+
+      if (mounted) context.pop();
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
     }
   }
 
@@ -42,338 +105,119 @@ class _AddPortfolioItemScreenState extends State<AddPortfolioItemScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(
-        title: Text(_title, style: AppTextStyles.h2),
-        leading: IconButton(
-          icon: const Icon(Icons.close_rounded),
-          onPressed: () => context.pop(),
-        ),
-      ),
+      appBar: AppBar(title: Text('Add Portfolio Item', style: AppTextStyles.h2)),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(AppDimensions.lg),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildHeader().animate().fadeIn().slideY(begin: 0.1),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Types
+            Row(
+              children: _types.map((t) => Expanded(
+                child: GestureDetector(
+                  onTap: () { HapticFeedback.selectionClick(); setState(() => _selectedType = t.$1); },
+                  child: Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 4),
+                    padding: const EdgeInsets.symmetric(vertical: AppDimensions.md),
+                    decoration: BoxDecoration(
+                      color: _selectedType == t.$1 ? t.$4.withValues(alpha: 0.15) : AppColors.surfaceLight,
+                      borderRadius: BorderRadius.circular(AppDimensions.radiusMD),
+                      border: Border.all(color: _selectedType == t.$1 ? t.$4 : AppColors.border),
+                    ),
+                    child: Column(children: [
+                      Icon(t.$3, color: _selectedType == t.$1 ? t.$4 : AppColors.textMuted),
+                      const SizedBox(height: 4),
+                      Text(t.$2, style: AppTextStyles.caption.copyWith(color: _selectedType == t.$1 ? t.$4 : AppColors.textSecondary)),
+                    ]),
+                  ),
+                ),
+              )).toList(),
+            ),
+            const SizedBox(height: AppDimensions.xxl),
+
+            // Form
+            GlassContainer(
+              child: Column(children: [
+                TextFormField(
+                  controller: _nameController,
+                  style: AppTextStyles.bodyMedium,
+                  textCapitalization: TextCapitalization.words,
+                  decoration: const InputDecoration(labelText: 'Name (e.g. Home Loan, HDFC Mutual Fund)'),
+                ),
+                const SizedBox(height: AppDimensions.lg),
+                TextFormField(
+                  controller: _amountController,
+                  style: AppTextStyles.bodyMedium,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(labelText: 'Amount (₹)', prefixIcon: Icon(Icons.currency_rupee_rounded)),
+                ),
+                const SizedBox(height: AppDimensions.lg),
+                TextFormField(
+                  controller: _interestRateController,
+                  style: AppTextStyles.bodyMedium,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  decoration: const InputDecoration(labelText: 'Interest Rate % (Optional)', prefixIcon: Icon(Icons.percent_rounded)),
+                ),
+              ]),
+            ),
+            const SizedBox(height: AppDimensions.xxl),
+
+            // Reminders (Only for debt/investment)
+            if (_selectedType != PortfolioType.asset) ...[
+              Text('Schedule & Reminders', style: AppTextStyles.h3),
+              const SizedBox(height: AppDimensions.md),
+              GlassContainer(
+                child: Column(children: [
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Next Payment Date'),
+                    subtitle: Text(DateFormat('dd MMM yyyy').format(_nextPaymentDate)),
+                    trailing: const Icon(Icons.calendar_today_rounded),
+                    onTap: _pickDate,
+                  ),
+                  const Divider(),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Enable Push Reminder'),
+                    value: _enableReminder,
+                    onChanged: (v) => setState(() => _enableReminder = v),
+                    activeColor: AppColors.primary,
+                  ),
+                  if (_enableReminder) ...[
+                    const SizedBox(height: AppDimensions.md),
+                    Row(children: [
+                      const Text('Remind me '),
+                      DropdownButton<int>(
+                        value: _reminderDaysBefore,
+                        dropdownColor: AppColors.cardBg,
+                        items: [1, 2, 3, 5, 7].map((d) => DropdownMenuItem(value: d, child: Text('$d days'))).toList(),
+                        onChanged: (v) { if (v != null) setState(() => _reminderDaysBefore = v); },
+                      ),
+                      const Text(' before due date'),
+                    ]),
+                  ]
+                ]),
+              ),
               const SizedBox(height: AppDimensions.xxl),
-              ..._buildFormFields().animate(interval: 100.ms).fadeIn().slideX(begin: 0.05),
-              const SizedBox(height: AppDimensions.xxl),
             ],
-          ),
-        ),
-      ),
-      bottomNavigationBar: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(AppDimensions.lg),
-          child: _buildSaveButton().animate().fadeIn(delay: 500.ms).slideY(begin: 0.2),
-        ),
-      ),
-    );
-  }
 
-  Widget _buildHeader() {
-    return Container(
-      padding: const EdgeInsets.all(AppDimensions.xl),
-      decoration: BoxDecoration(
-        color: _themeColor.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(AppDimensions.radiusXL),
-        border: Border.all(color: _themeColor.withValues(alpha: 0.3)),
-      ),
-      child: Row(
-        children: [
-          Icon(
-            _getIconForType(),
-            color: _themeColor,
-            size: 48,
-          ),
-          const SizedBox(width: AppDimensions.lg),
-          Expanded(
-            child: Text(
-              'Keep track of your long-term wealth building progress.',
-              style: AppTextStyles.bodyMedium.copyWith(color: _themeColor),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  IconData _getIconForType() {
-    switch (widget.type) {
-      case 'investment': return Icons.trending_up_rounded;
-      case 'debt': return Icons.handshake_rounded;
-      case 'asset': return Icons.shopping_bag_rounded;
-      case 'policy': return Icons.health_and_safety_rounded;
-      default: return Icons.account_balance_rounded;
-    }
-  }
-
-  List<Widget> _buildFormFields() {
-    switch (widget.type) {
-      case 'investment':
-        return [
-          _buildDropdown(
-            label: 'Investment Type',
-            items: ['Fixed Deposit', 'Recurring Deposit', 'Mutual Fund (SIP)', 'Stocks', 'Other'],
-            value: 'Fixed Deposit',
-          ),
-          const SizedBox(height: AppDimensions.lg),
-          _buildInput(label: 'Investment Name', hint: 'e.g., HDFC Fixed Deposit'),
-          const SizedBox(height: AppDimensions.lg),
-          Row(
-            children: [
-              Expanded(child: _buildInput(label: 'Amount (₹)', hint: '0.00', keyboardType: TextInputType.number)),
-              const SizedBox(width: AppDimensions.lg),
-              Expanded(child: _buildInput(label: 'Expected Return (%)', hint: '7.5', keyboardType: TextInputType.number)),
-            ],
-          ),
-          const SizedBox(height: AppDimensions.lg),
-          Row(
-            children: [
-              Expanded(
-                child: _buildDropdown(
-                  label: 'Frequency',
-                  items: ['One-time', 'Monthly', 'Yearly'],
-                  value: 'Monthly',
+            SizedBox(
+              width: double.infinity,
+              height: AppDimensions.buttonHeight,
+              child: ElevatedButton(
+                onPressed: _isSaving ? null : _save,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppDimensions.radiusMD)),
                 ),
+                child: _isSaving
+                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                    : const Text('Save to Portfolio'),
               ),
-              const SizedBox(width: AppDimensions.lg),
-              Expanded(child: _buildInput(label: 'Maturity Date', hint: 'DD/MM/YYYY')),
-            ],
-          ),
-          const SizedBox(height: AppDimensions.xl),
-          Text('Reminders & Notifications', style: AppTextStyles.h3),
-          const SizedBox(height: AppDimensions.md),
-          Row(
-            children: [
-              Expanded(child: _buildInput(label: 'Deduction Date (1-31)', hint: 'e.g., 5', keyboardType: TextInputType.number)),
-              const SizedBox(width: AppDimensions.lg),
-              Expanded(
-                child: _buildDropdown(
-                  label: 'Remind Me Before',
-                  items: ['1 Day', '3 Days', '5 Days', '1 Week'],
-                  value: '3 Days',
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppDimensions.md),
-          Row(
-            children: [
-              Icon(Icons.notifications_active_rounded, color: AppColors.primary, size: 20),
-              const SizedBox(width: AppDimensions.sm),
-              Text('Push Notification', style: AppTextStyles.bodyMedium),
-              const Spacer(),
-              Switch(value: true, onChanged: (v) {}, activeColor: AppColors.primary),
-            ],
-          ),
-          Row(
-            children: [
-              Icon(Icons.sms_rounded, color: AppColors.primary, size: 20),
-              const SizedBox(width: AppDimensions.sm),
-              Text('SMS Alert', style: AppTextStyles.bodyMedium),
-              const Spacer(),
-              Switch(value: true, onChanged: (v) {}, activeColor: AppColors.primary),
-            ],
-          ),
-        ];
-      case 'debt':
-        return [
-          _buildInput(label: 'Borrower Name', hint: 'e.g., Rahul Kumar'),
-          const SizedBox(height: AppDimensions.lg),
-          _buildInput(label: 'Amount Given (₹)', hint: '0.00', keyboardType: TextInputType.number),
-          const SizedBox(height: AppDimensions.lg),
-          _buildInput(label: 'Expected Return Date', hint: 'DD/MM/YYYY'),
-        ];
-      case 'asset':
-        return [
-          _buildInput(label: 'Asset Name', hint: 'e.g., MacBook Pro M3'),
-          const SizedBox(height: AppDimensions.lg),
-          _buildInput(label: 'Total Value (₹)', hint: '0.00', keyboardType: TextInputType.number),
-          const SizedBox(height: AppDimensions.lg),
-          Row(
-            children: [
-              Expanded(child: _buildInput(label: 'EMI Amount (₹)', hint: '0.00', keyboardType: TextInputType.number)),
-              const SizedBox(width: AppDimensions.lg),
-              Expanded(child: _buildInput(label: 'Total Months', hint: '12', keyboardType: TextInputType.number)),
-            ],
-          ),
-        ];
-      case 'policy':
-        return [
-          _buildDropdown(
-            label: 'Policy Type',
-            items: ['Life Insurance', 'Health Insurance', 'Vehicle Insurance', 'Other'],
-            value: 'Life Insurance',
-          ),
-          const SizedBox(height: AppDimensions.lg),
-          _buildInput(label: 'Policy Name', hint: 'e.g., LIC Jeevan Anand'),
-          const SizedBox(height: AppDimensions.lg),
-          Row(
-            children: [
-              Expanded(child: _buildInput(label: 'Sum Assured (₹)', hint: '0.00', keyboardType: TextInputType.number)),
-              const SizedBox(width: AppDimensions.lg),
-              Expanded(child: _buildInput(label: 'Premium (₹)', hint: '0.00', keyboardType: TextInputType.number)),
-            ],
-          ),
-          const SizedBox(height: AppDimensions.lg),
-          Row(
-            children: [
-              Expanded(
-                child: _buildDropdown(
-                  label: 'Frequency',
-                  items: ['Monthly', 'Quarterly', 'Yearly'],
-                  value: 'Yearly',
-                ),
-              ),
-              const SizedBox(width: AppDimensions.lg),
-              Expanded(child: _buildInput(label: 'Renewal Date', hint: 'DD/MM/YYYY')),
-            ],
-          ),
-          const SizedBox(height: AppDimensions.xl),
-          Text('Reminders & Notifications', style: AppTextStyles.h3),
-          const SizedBox(height: AppDimensions.md),
-          Row(
-            children: [
-              Expanded(child: _buildInput(label: 'Premium Date (1-31)', hint: 'e.g., 10', keyboardType: TextInputType.number)),
-              const SizedBox(width: AppDimensions.lg),
-              Expanded(
-                child: _buildDropdown(
-                  label: 'Remind Me Before',
-                  items: ['1 Day', '3 Days', '5 Days', '1 Week'],
-                  value: '5 Days',
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppDimensions.md),
-          Row(
-            children: [
-              Icon(Icons.notifications_active_rounded, color: AppColors.catInvestment, size: 20),
-              const SizedBox(width: AppDimensions.sm),
-              Text('Push Notification', style: AppTextStyles.bodyMedium),
-              const Spacer(),
-              Switch(value: true, onChanged: (v) {}, activeColor: AppColors.catInvestment),
-            ],
-          ),
-          Row(
-            children: [
-              Icon(Icons.sms_rounded, color: AppColors.catInvestment, size: 20),
-              const SizedBox(width: AppDimensions.sm),
-              Text('SMS Alert', style: AppTextStyles.bodyMedium),
-              const Spacer(),
-              Switch(value: false, onChanged: (v) {}, activeColor: AppColors.catInvestment),
-            ],
-          ),
-        ];
-      default:
-        return [];
-    }
-  }
-
-  Widget _buildInput({required String label, required String hint, TextInputType? keyboardType}) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label, style: AppTextStyles.label.copyWith(color: AppColors.textSecondary)),
-        const SizedBox(height: AppDimensions.sm),
-        TextFormField(
-          keyboardType: keyboardType,
-          style: AppTextStyles.bodyMedium,
-          decoration: InputDecoration(
-            hintText: hint,
-            hintStyle: AppTextStyles.body.copyWith(color: AppColors.textMuted),
-            filled: true,
-            fillColor: AppColors.surface,
-            contentPadding: const EdgeInsets.all(AppDimensions.lg),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(AppDimensions.radiusMD),
-              borderSide: BorderSide.none,
             ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(AppDimensions.radiusMD),
-              borderSide: const BorderSide(color: AppColors.border),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(AppDimensions.radiusMD),
-              borderSide: BorderSide(color: _themeColor, width: 2),
-            ),
-          ),
+          ],
         ),
-      ],
-    );
-  }
-
-  Widget _buildDropdown({required String label, required List<String> items, required String value}) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label, style: AppTextStyles.label.copyWith(color: AppColors.textSecondary)),
-        const SizedBox(height: AppDimensions.sm),
-        DropdownButtonFormField<String>(
-          value: value,
-          icon: Icon(Icons.keyboard_arrow_down_rounded, color: AppColors.textMuted),
-          style: AppTextStyles.bodyMedium,
-          dropdownColor: AppColors.surface,
-          items: items.map((item) {
-            return DropdownMenuItem(
-              value: item,
-              child: Text(item, style: AppTextStyles.bodyMedium),
-            );
-          }).toList(),
-          onChanged: (val) {},
-          decoration: InputDecoration(
-            filled: true,
-            fillColor: AppColors.surface,
-            contentPadding: const EdgeInsets.all(AppDimensions.lg),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(AppDimensions.radiusMD),
-              borderSide: BorderSide.none,
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(AppDimensions.radiusMD),
-              borderSide: const BorderSide(color: AppColors.border),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(AppDimensions.radiusMD),
-              borderSide: BorderSide(color: _themeColor, width: 2),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildSaveButton() {
-    return Container(
-      height: AppDimensions.buttonHeight,
-      decoration: BoxDecoration(
-        color: _themeColor,
-        borderRadius: BorderRadius.circular(AppDimensions.radiusMD),
-        boxShadow: [
-          BoxShadow(
-            color: _themeColor.withValues(alpha: 0.4),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: ElevatedButton(
-        onPressed: () {
-          HapticFeedback.heavyImpact();
-          // Implement save logic here
-          context.pop();
-        },
-        style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.transparent,
-          shadowColor: Colors.transparent,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppDimensions.radiusMD),
-          ),
-        ),
-        child: Text('Save ${_title.replaceAll('Add ', '')}', style: AppTextStyles.button.copyWith(color: Colors.white)),
       ),
     );
   }

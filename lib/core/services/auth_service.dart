@@ -1,14 +1,16 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 
 class AuthService {
   FirebaseAuth? _auth;
+  final GoogleSignIn _googleSignIn = GoogleSignIn();
 
   AuthService() {
     try {
       _auth = FirebaseAuth.instance;
     } catch (e) {
-      debugPrint('Firebase Auth not available yet: $e');
+      debugPrint('Firebase Auth not available: $e');
     }
   }
 
@@ -18,29 +20,53 @@ class AuthService {
   }
 
   User? get currentUser => _auth?.currentUser;
+  String get currentUserId => _auth?.currentUser?.uid ?? '';
+  String get currentUserName => _auth?.currentUser?.displayName ?? _auth?.currentUser?.email?.split('@').first ?? 'User';
+  String get currentUserEmail => _auth?.currentUser?.email ?? '';
+  String get currentUserInitial => currentUserName.isNotEmpty ? currentUserName[0].toUpperCase() : 'U';
 
-  Future<UserCredential?> signInWithEmail(String email, String password) async {
-    if (_auth == null) throw Exception('Firebase not configured. Please set up Firebase first.');
-    return await _auth!.signInWithEmailAndPassword(
-      email: email,
-      password: password,
-    );
+  Future<UserCredential> signInWithEmail(String email, String password) async {
+    if (_auth == null) throw Exception('Firebase not initialized');
+    return await _auth!.signInWithEmailAndPassword(email: email.trim(), password: password);
   }
 
-  Future<UserCredential?> signUpWithEmail(String email, String password) async {
-    if (_auth == null) throw Exception('Firebase not configured. Please set up Firebase first.');
-    return await _auth!.createUserWithEmailAndPassword(
-      email: email,
-      password: password,
-    );
+  Future<UserCredential> signUpWithEmail(String email, String password, String displayName) async {
+    if (_auth == null) throw Exception('Firebase not initialized');
+    final cred = await _auth!.createUserWithEmailAndPassword(email: email.trim(), password: password);
+    await cred.user?.updateDisplayName(displayName.trim());
+    return cred;
   }
 
   Future<UserCredential?> signInWithGoogle() async {
-    throw Exception('Google Sign-In is temporarily disabled.');
+    try {
+      final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
+      if (googleUser == null) return null;
+      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+      final credential = GoogleAuthProvider.credential(
+        accessToken: googleAuth.accessToken,
+        idToken: googleAuth.idToken,
+      );
+      return await _auth?.signInWithCredential(credential);
+    } catch (e) {
+      debugPrint('Google Sign-In error: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> updateDisplayName(String name) async {
+    await _auth?.currentUser?.updateDisplayName(name.trim());
+  }
+
+  Future<void> sendPasswordReset(String email) async {
+    await _auth?.sendPasswordResetEmail(email: email.trim());
   }
 
   Future<void> signOut() async {
-    if (_auth == null) return;
-    await _auth!.signOut();
+    try { await _googleSignIn.signOut(); } catch (_) {}
+    await _auth?.signOut();
+  }
+
+  Future<void> deleteAccount() async {
+    await _auth?.currentUser?.delete();
   }
 }

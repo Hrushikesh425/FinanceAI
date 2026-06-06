@@ -1,111 +1,86 @@
-import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:timezone/timezone.dart' as tz;
+import 'package:timezone/data/latest_all.dart' as tz_data;
 import 'package:flutter/foundation.dart';
-import 'package:firebase_core/firebase_core.dart';
-
-@pragma('vm:entry-point')
-Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  try {
-    await Firebase.initializeApp();
-  } catch (e) {
-    debugPrint('Firebase not initialized in background handler');
-  }
-  debugPrint("Handling a background message: ${message.messageId}");
-}
+import 'package:permission_handler/permission_handler.dart';
 
 class PushNotificationService {
-  FirebaseMessaging? _messaging;
-  final FlutterLocalNotificationsPlugin _localNotificationsPlugin = FlutterLocalNotificationsPlugin();
-  
-  bool _initialized = false;
-
-  PushNotificationService() {
-    try {
-      _messaging = FirebaseMessaging.instance;
-    } catch (e) {
-      debugPrint('Firebase messaging not available yet.');
-    }
-  }
+  final FlutterLocalNotificationsPlugin _flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
+  bool _isInitialized = false;
 
   Future<void> initialize() async {
-    if (_initialized) return;
+    if (_isInitialized) return;
     
-    // 1. Initialize Local Notifications (for foreground & scheduled reminders)
+    tz_data.initializeTimeZones();
+    
     const AndroidInitializationSettings initializationSettingsAndroid =
         AndroidInitializationSettings('@mipmap/ic_launcher');
-    const DarwinInitializationSettings initializationSettingsDarwin =
+    
+    // For iOS if needed later
+    final DarwinInitializationSettings initializationSettingsDarwin =
         DarwinInitializationSettings(
             requestAlertPermission: true,
             requestBadgePermission: true,
             requestSoundPermission: true);
-    
-    const InitializationSettings initializationSettings = InitializationSettings(
+            
+    final InitializationSettings initializationSettings = InitializationSettings(
       android: initializationSettingsAndroid,
       iOS: initializationSettingsDarwin,
     );
     
-    await _localNotificationsPlugin.initialize(
-      settings: initializationSettings,
+    await _flutterLocalNotificationsPlugin.initialize(
+      initializationSettings,
+      onDidReceiveNotificationResponse: (NotificationResponse response) {
+        debugPrint('Notification clicked: ${response.payload}');
+      },
     );
+    
+    // Request permission on Android 13+
+    await Permission.notification.request();
+    
+    _isInitialized = true;
+  }
 
-    // 2. Initialize Firebase Messaging (if available)
-    if (_messaging != null) {
-      FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
-
-      NotificationSettings settings = await _messaging!.requestPermission(
-        alert: true,
-        badge: true,
-        sound: true,
-      );
-
-      debugPrint('User granted permission: ${settings.authorizationStatus}');
-
-      // Handle foreground messages
-      FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-        debugPrint('Got a message whilst in the foreground!');
-        debugPrint('Message data: ${message.data}');
-
-        if (message.notification != null) {
-          _showLocalNotification(
-            message.notification!.title ?? 'Finance AI',
-            message.notification!.body ?? '',
-          );
-        }
-      });
+  Future<void> scheduleReminder({
+    required int id,
+    required String title,
+    required String body,
+    required DateTime scheduledDate,
+    String? payload,
+  }) async {
+    await initialize();
+    
+    // Ensure the date is in the future
+    if (scheduledDate.isBefore(DateTime.now())) {
+      debugPrint('Cannot schedule notification in the past');
+      return;
     }
 
-    _initialized = true;
-  }
-
-  Future<String?> getToken() async {
-    if (_messaging == null) return null;
-    return await _messaging!.getToken();
-  }
-
-  // Helper to show a local notification immediately (or from FCM)
-  Future<void> _showLocalNotification(String title, String body) async {
-    const AndroidNotificationDetails androidPlatformChannelSpecifics =
-        AndroidNotificationDetails(
-      'finance_ai_reminders', // channel id
-      'Reminders', // channel name
-      channelDescription: 'Scheduled reminders for investments and bills',
-      importance: Importance.max,
-      priority: Priority.high,
-      showWhen: true,
+    await _flutterLocalNotificationsPlugin.zonedSchedule(
+      id,
+      title,
+      body,
+      tz.TZDateTime.from(scheduledDate, tz.local),
+      const NotificationDetails(
+        android: AndroidNotificationDetails(
+          'finance_ai_reminders',
+          'Finance Reminders',
+          channelDescription: 'Reminders for bills, EMIs, and investments',
+          importance: Importance.max,
+          priority: Priority.high,
+          icon: '@mipmap/ic_launcher',
+        ),
+      ),
+      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
+      payload: payload,
     );
-    const NotificationDetails platformChannelSpecifics =
-        NotificationDetails(android: androidPlatformChannelSpecifics);
-    
-    await _localNotificationsPlugin.show(
-      id: DateTime.now().millisecond,
-      title: title,
-      body: body,
-      notificationDetails: platformChannelSpecifics,
-    );
+    debugPrint('Scheduled notification ID $id for $scheduledDate');
   }
-
-  // Simulate scheduling a local push notification for a Portfolio reminder
-  Future<void> scheduleReminder(String title, String body, DateTime scheduledDate) async {
-    debugPrint('Scheduled Reminder for $scheduledDate: $title - $body');
+  
+  Future<void> cancelReminder(int id) async {
+    await _flutterLocalNotificationsPlugin.cancel(id);
   }
 }
+
+final pushNotificationService = PushNotificationService();

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 import 'package:finance_ai/core/constants/app_colors.dart';
 import 'package:finance_ai/core/constants/app_dimensions.dart';
 import 'package:finance_ai/core/constants/app_text_styles.dart';
@@ -9,15 +11,15 @@ import 'package:finance_ai/core/widgets/custom_app_bar.dart';
 import 'package:finance_ai/core/widgets/vault_card.dart';
 import 'package:finance_ai/core/widgets/compact_card.dart';
 import 'package:finance_ai/core/widgets/glass_container.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:finance_ai/core/models/transaction.dart';
 import 'package:finance_ai/features/home/providers/transaction_provider.dart';
+import 'package:finance_ai/features/auth/providers/auth_provider.dart';
 import 'package:finance_ai/features/home/presentation/widgets/monthly_summary.dart';
 import 'package:finance_ai/features/home/presentation/widgets/quick_actions.dart';
+import 'package:finance_ai/features/home/presentation/widgets/sms_import_banner.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
-
   @override
   ConsumerState<HomeScreen> createState() => _HomeScreenState();
 }
@@ -26,9 +28,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   int _expandedVaultIndex = -1;
 
   void _handleVaultExpand(int index, bool isExpanded) {
-    setState(() {
-      _expandedVaultIndex = isExpanded ? index : -1;
-    });
+    setState(() => _expandedVaultIndex = isExpanded ? index : -1);
   }
 
   String _getGreeting() {
@@ -40,56 +40,46 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final authService = ref.watch(authServiceProvider);
+    final userName = authService.currentUserName;
+
     return Scaffold(
       backgroundColor: AppColors.background,
       body: Column(
         children: [
-          // App bar
           CustomAppBar(
-            username: 'Hrushikesh',
+            username: userName,
             greeting: _getGreeting(),
-            notificationCount: 3,
+            notificationCount: 0,
           ).animate().fadeIn(duration: 400.ms).slideY(begin: -0.1),
-
-          // Body
           Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(
-                AppDimensions.lg,
-                0,
-                AppDimensions.lg,
-                AppDimensions.bottomNavHeight + AppDimensions.xxl,
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Monthly summary
-                  const MonthlySummary()
-                      .animate().fadeIn(duration: 500.ms).slideY(begin: 0.05),
-
-                  const SizedBox(height: AppDimensions.xxl),
-
-                  // Quick Actions
-                  Text('Quick Actions', style: AppTextStyles.h3)
-                      .animate().fadeIn(delay: 200.ms),
-                  const SizedBox(height: AppDimensions.md),
-                  const QuickActions()
-                      .animate().fadeIn(delay: 300.ms),
-
-                  const SizedBox(height: AppDimensions.xxl),
-                  
-                  // Link to Portfolio
-                  _buildPortfolioLink(context).animate().fadeIn(delay: 350.ms),
-
-                  const SizedBox(height: AppDimensions.xxl),
-
-                  // Daily Vaults
-                  Text('Daily Tracking', style: AppTextStyles.h3)
-                      .animate().fadeIn(delay: 400.ms),
-                  const SizedBox(height: AppDimensions.md),
-
-                  _buildVaultsList(),
-                ],
+            child: RefreshIndicator(
+              color: AppColors.primary,
+              backgroundColor: AppColors.cardBg,
+              onRefresh: () async {
+                ref.invalidate(transactionsProvider);
+                await Future.delayed(const Duration(milliseconds: 500));
+              },
+              child: SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.fromLTRB(AppDimensions.lg, 0, AppDimensions.lg, AppDimensions.bottomNavHeight + AppDimensions.xxl),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const MonthlySummary().animate().fadeIn(duration: 500.ms).slideY(begin: 0.05),
+                    const SizedBox(height: AppDimensions.xxl),
+                    const SmsImportBanner(),
+                    Text('Quick Actions', style: AppTextStyles.h3).animate().fadeIn(delay: 200.ms),
+                    const SizedBox(height: AppDimensions.md),
+                    const QuickActions().animate().fadeIn(delay: 300.ms),
+                    const SizedBox(height: AppDimensions.xxl),
+                    _buildPortfolioLink(context).animate().fadeIn(delay: 350.ms),
+                    const SizedBox(height: AppDimensions.xxl),
+                    Text('Recent Transactions', style: AppTextStyles.h3).animate().fadeIn(delay: 400.ms),
+                    const SizedBox(height: AppDimensions.md),
+                    _buildTransactionsList(),
+                  ],
+                ),
               ),
             ),
           ),
@@ -100,118 +90,131 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   Widget _buildPortfolioLink(BuildContext context) {
     return GestureDetector(
-      onTap: () {
-        HapticFeedback.lightImpact();
-        // Index 2 is the new Portfolio branch in the shell
-        // We can't directly context.go to a shell branch without the shell handling it,
-        // but /portfolio is the path!
-        context.go('/portfolio');
-      },
+      onTap: () { HapticFeedback.lightImpact(); context.go('/portfolio'); },
       child: GlassContainer(
         padding: const EdgeInsets.all(AppDimensions.lg),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(AppDimensions.sm),
-              decoration: BoxDecoration(
-                color: AppColors.primary.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(AppDimensions.radiusMD),
-              ),
-              child: const Icon(Icons.pie_chart_rounded, color: AppColors.primary),
-            ),
-            const SizedBox(width: AppDimensions.md),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('My Portfolio', style: AppTextStyles.h3),
-                  Text('Manage Investments, Debts & Assets', style: AppTextStyles.bodySmall),
-                ],
-              ),
-            ),
-            const Icon(Icons.arrow_forward_ios_rounded, color: AppColors.textMuted, size: 16),
-          ],
-        ),
+        child: Row(children: [
+          Container(
+            padding: const EdgeInsets.all(AppDimensions.sm),
+            decoration: BoxDecoration(color: AppColors.primary.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(AppDimensions.radiusMD)),
+            child: const Icon(Icons.pie_chart_rounded, color: AppColors.primary),
+          ),
+          const SizedBox(width: AppDimensions.md),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('My Portfolio', style: AppTextStyles.h3),
+            Text('Manage Investments, Debts & Assets', style: AppTextStyles.bodySmall),
+          ])),
+          const Icon(Icons.arrow_forward_ios_rounded, color: AppColors.textMuted, size: 16),
+        ]),
       ),
     );
   }
 
-  Widget _buildVaultsList() {
+  Widget _buildTransactionsList() {
     final asyncTransactions = ref.watch(transactionsProvider);
 
     return asyncTransactions.when(
-      loading: () => const Center(child: CircularProgressIndicator(color: AppColors.primary)),
-      error: (e, st) => Center(child: Text('Error loading transactions: $e', style: AppTextStyles.body)),
+      loading: () => const Center(child: Padding(padding: EdgeInsets.all(40), child: CircularProgressIndicator(color: AppColors.primary))),
+      error: (e, st) => GlassContainer(
+        child: Column(children: [
+          const Icon(Icons.cloud_off_rounded, color: AppColors.textMuted, size: 40),
+          const SizedBox(height: AppDimensions.md),
+          Text('Unable to load transactions', style: AppTextStyles.bodyMedium),
+          const SizedBox(height: AppDimensions.sm),
+          Text('$e', style: AppTextStyles.caption, textAlign: TextAlign.center),
+        ]),
+      ),
       data: (transactions) {
         if (transactions.isEmpty) {
-          // Fallback to mock if empty (just to keep UI beautiful while testing)
-          return _buildMockVaults();
+          return GlassContainer(
+            child: Column(children: [
+              const SizedBox(height: AppDimensions.lg),
+              Icon(Icons.receipt_long_rounded, color: AppColors.textMuted.withValues(alpha: 0.5), size: 48),
+              const SizedBox(height: AppDimensions.md),
+              Text('No transactions yet', style: AppTextStyles.h3.copyWith(color: AppColors.textSecondary)),
+              const SizedBox(height: AppDimensions.sm),
+              Text('Tap + to add your first expense or income', style: AppTextStyles.body, textAlign: TextAlign.center),
+              const SizedBox(height: AppDimensions.lg),
+            ]),
+          ).animate().fadeIn(delay: 500.ms);
         }
 
-        // Group actual transactions
-        final upiTx = transactions.where((t) => t.paymentMethod == 'UPI').toList();
-        final otherTx = transactions.where((t) => t.paymentMethod != 'UPI').toList();
+        // Group by date
+        final Map<String, List<AppTransaction>> grouped = {};
+        for (final tx in transactions.take(50)) {
+          final key = _formatDateKey(tx.date);
+          grouped.putIfAbsent(key, () => []).add(tx);
+        }
 
-        final vaults = [
-          _VaultData('UPI & Bank', Icons.account_balance_wallet_rounded, AppColors.accent, upiTx.length, '${upiTx.length} items', upiTx),
-          _VaultData('Other Transactions', Icons.receipt_long_rounded, const Color(0xFF26A69A), otherTx.length, '${otherTx.length} items', otherTx),
-        ];
-
-        return _buildVaultsColumn(vaults);
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: grouped.entries.map((entry) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(top: AppDimensions.md, bottom: AppDimensions.sm),
+                  child: Text(entry.key, style: AppTextStyles.caption.copyWith(fontWeight: FontWeight.w600, letterSpacing: 0.5)),
+                ),
+                ...entry.value.map((tx) => Dismissible(
+                  key: ValueKey(tx.id),
+                  direction: DismissDirection.endToStart,
+                  background: Container(
+                    alignment: Alignment.centerRight,
+                    padding: const EdgeInsets.only(right: AppDimensions.lg),
+                    margin: const EdgeInsets.only(bottom: AppDimensions.sm),
+                    decoration: BoxDecoration(color: AppColors.error.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(AppDimensions.radiusMD)),
+                    child: const Icon(Icons.delete_outline_rounded, color: AppColors.error),
+                  ),
+                  confirmDismiss: (_) async {
+                    return await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(
+                      backgroundColor: AppColors.cardBg,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: BorderSide(color: AppColors.glassBorder)),
+                      title: Text('Delete Transaction', style: AppTextStyles.h3),
+                      content: Text('Delete "${tx.title}" (₹${tx.amount.abs().toStringAsFixed(0)})?', style: AppTextStyles.body),
+                      actions: [
+                        TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+                        ElevatedButton(
+                          onPressed: () => Navigator.pop(ctx, true),
+                          style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
+                          child: const Text('Delete'),
+                        ),
+                      ],
+                    ));
+                  },
+                  onDismissed: (_) {
+                    final user = ref.read(authStateProvider).value;
+                    if (user != null) {
+                      final fs = ref.read(firestoreServiceProvider);
+                      fs.deleteTransaction(user.uid, tx.id);
+                    }
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.only(bottom: AppDimensions.sm),
+                    child: CompactCard(
+                      title: tx.title,
+                      subtitle: '${tx.category} • ${tx.paymentMethod}',
+                      amount: tx.amount,
+                      icon: tx.icon,
+                      iconColor: tx.type == TransactionType.income ? AppColors.income : AppColors.expense,
+                    ),
+                  ),
+                )),
+              ],
+            );
+          }).toList(),
+        );
       },
     );
   }
 
-  Widget _buildMockVaults() {
-    final mockVaults = [
-      _VaultData('UPI & GPay', Icons.account_balance_wallet_rounded, AppColors.accent, 3, '₹12,450 this month', [
-        AppTransaction(id: '1', userId: '1', title: 'Swiggy', amount: -345, type: TransactionType.expense, category: 'Food', date: DateTime.now(), paymentMethod: 'UPI'),
-        AppTransaction(id: '2', userId: '1', title: 'Amazon India', amount: -1299, type: TransactionType.expense, category: 'Shopping', date: DateTime.now(), paymentMethod: 'UPI'),
-        AppTransaction(id: '3', userId: '1', title: 'Rent Transfer', amount: -15000, type: TransactionType.expense, category: 'Housing', date: DateTime.now(), paymentMethod: 'Bank Transfer'),
-      ]),
-    ];
-    return _buildVaultsColumn(mockVaults);
+  String _formatDateKey(DateTime date) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final txDate = DateTime(date.year, date.month, date.day);
+    if (txDate == today) return 'Today';
+    if (txDate == today.subtract(const Duration(days: 1))) return 'Yesterday';
+    if (now.difference(date).inDays < 7) return DateFormat('EEEE').format(date);
+    return DateFormat('d MMMM yyyy').format(date);
   }
-
-  Widget _buildVaultsColumn(List<_VaultData> vaults) {
-    return Column(
-      children: List.generate(vaults.length, (i) {
-        final v = vaults[i];
-        return Padding(
-          padding: const EdgeInsets.only(bottom: AppDimensions.md),
-          child: VaultCard(
-            title: v.title,
-            icon: v.icon,
-            iconColor: v.color,
-            count: v.count,
-            summary: v.summary,
-            isExpanded: _expandedVaultIndex == i,
-            onExpand: (expanded) => _handleVaultExpand(i, expanded),
-            child: Column(
-              children: v.items.map((tx) => CompactCard(
-                title: tx.title,
-                subtitle: tx.category,
-                amount: tx.amount,
-                icon: tx.icon,
-                iconColor: v.color,
-              )).toList(),
-            ),
-          ).animate().fadeIn(
-            delay: Duration(milliseconds: 500 + (i * AppDimensions.staggerDelay)),
-            duration: const Duration(milliseconds: AppDimensions.animNormal),
-          ).slideY(begin: 0.05),
-        );
-      }),
-    );
-  }
-}
-
-class _VaultData {
-  final String title;
-  final IconData icon;
-  final Color color;
-  final int count;
-  final String summary;
-  final List<AppTransaction> items;
-  _VaultData(this.title, this.icon, this.color, this.count, this.summary, this.items);
 }
