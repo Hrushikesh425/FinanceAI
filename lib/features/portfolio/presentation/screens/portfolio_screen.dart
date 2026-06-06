@@ -9,6 +9,7 @@ import 'package:finance_ai/core/widgets/glass_container.dart';
 import 'package:finance_ai/core/models/portfolio_item.dart';
 import 'package:finance_ai/features/portfolio/providers/portfolio_provider.dart';
 import 'package:finance_ai/features/auth/providers/auth_provider.dart';
+import 'package:finance_ai/core/services/firestore_service.dart';
 import 'package:intl/intl.dart';
 
 class PortfolioScreen extends ConsumerWidget {
@@ -58,9 +59,9 @@ class PortfolioScreen extends ConsumerWidget {
           double totalAssets = 0;
 
           for (final item in items) {
-            if (item.type == PortfolioType.investment) totalInvested += item.amount;
-            if (item.type == PortfolioType.debt) totalDebt += item.amount;
-            if (item.type == PortfolioType.asset) totalAssets += item.amount;
+            if (item.type == PortfolioItemType.investment) totalInvested += item.amount;
+            if (item.type == PortfolioItemType.debt) totalDebt += item.amount;
+            if (item.type == PortfolioItemType.asset) totalAssets += item.amount;
           }
 
           final netWorth = totalInvested + totalAssets - totalDebt;
@@ -137,12 +138,12 @@ class PortfolioScreen extends ConsumerWidget {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(item.name, style: AppTextStyles.bodyMedium),
-                                if (item.interestRate != null || item.nextPaymentDate != null) ...[
+                                if (item.secondaryAmount > 0 || item.nextActionDate != null) ...[
                                   const SizedBox(height: 2),
                                   Text(
                                     [
-                                      if (item.interestRate != null) '${item.interestRate}%',
-                                      if (item.nextPaymentDate != null) 'Next: ${DateFormat('dd MMM').format(item.nextPaymentDate!)}'
+                                      if (item.secondaryAmount > 0) '${item.secondaryAmount}%',
+                                      if (item.nextActionDate != null) 'Next: ${DateFormat('dd MMM').format(item.nextActionDate!)}'
                                     ].join(' • '),
                                     style: AppTextStyles.caption,
                                   ),
@@ -174,19 +175,21 @@ class PortfolioScreen extends ConsumerWidget {
     );
   }
 
-  Color _getColor(PortfolioType type) {
+  Color _getColor(PortfolioItemType type) {
     switch (type) {
-      case PortfolioType.investment: return AppColors.primary;
-      case PortfolioType.debt: return AppColors.warning;
-      case PortfolioType.asset: return AppColors.accent;
+      case PortfolioItemType.investment: return AppColors.primary;
+      case PortfolioItemType.debt: return AppColors.warning;
+      case PortfolioItemType.asset: return AppColors.accent;
+      case PortfolioItemType.policy: return AppColors.primary;
     }
   }
 
-  IconData _getIcon(PortfolioType type) {
+  IconData _getIcon(PortfolioItemType type) {
     switch (type) {
-      case PortfolioType.investment: return Icons.trending_up_rounded;
-      case PortfolioType.debt: return Icons.money_off_rounded;
-      case PortfolioType.asset: return Icons.home_work_rounded;
+      case PortfolioItemType.investment: return Icons.trending_up_rounded;
+      case PortfolioItemType.debt: return Icons.money_off_rounded;
+      case PortfolioItemType.asset: return Icons.home_work_rounded;
+      case PortfolioItemType.policy: return Icons.shield_rounded;
     }
   }
 }

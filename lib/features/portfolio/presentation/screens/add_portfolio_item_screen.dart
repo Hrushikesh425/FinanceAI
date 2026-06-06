@@ -18,7 +18,7 @@ class AddPortfolioItemScreen extends ConsumerStatefulWidget {
 }
 
 class _AddPortfolioItemScreenState extends ConsumerState<AddPortfolioItemScreen> {
-  PortfolioType _selectedType = PortfolioType.investment;
+  PortfolioItemType _selectedType = PortfolioItemType.investment;
   final _nameController = TextEditingController();
   final _amountController = TextEditingController();
   final _interestRateController = TextEditingController();
@@ -28,9 +28,9 @@ class _AddPortfolioItemScreenState extends ConsumerState<AddPortfolioItemScreen>
   bool _isSaving = false;
 
   final _types = [
-    (PortfolioType.investment, 'Investment', Icons.trending_up_rounded, AppColors.primary),
-    (PortfolioType.debt, 'Debt / EMI', Icons.money_off_rounded, AppColors.warning),
-    (PortfolioType.asset, 'Asset', Icons.home_work_rounded, AppColors.accent),
+    (PortfolioItemType.investment, 'Investment', Icons.trending_up_rounded, AppColors.primary),
+    (PortfolioItemType.debt, 'Debt / EMI', Icons.money_off_rounded, AppColors.warning),
+    (PortfolioItemType.asset, 'Asset', Icons.home_work_rounded, AppColors.accent),
   ];
 
   @override
@@ -68,26 +68,28 @@ class _AddPortfolioItemScreenState extends ConsumerState<AddPortfolioItemScreen>
 
       final item = PortfolioItem(
         id: DateTime.now().millisecondsSinceEpoch.toString(),
-        name: _nameController.text.trim(),
+        userId: '', // populated in provider
         type: _selectedType,
+        subType: _selectedType.name,
+        name: _nameController.text.trim(),
         amount: amount,
-        interestRate: rate,
-        nextPaymentDate: (_selectedType == PortfolioType.debt || _selectedType == PortfolioType.investment) ? _nextPaymentDate : null,
-        reminderDaysBefore: _enableReminder ? _reminderDaysBefore : null,
+        secondaryAmount: rate ?? 0.0,
+        nextActionDate: (_selectedType == PortfolioItemType.debt || _selectedType == PortfolioItemType.investment) ? _nextPaymentDate : null,
+        reminderDaysBefore: _enableReminder ? _reminderDaysBefore : 1,
       );
 
       final addFn = ref.read(addPortfolioItemProvider);
       await addFn(item);
       
       // Schedule Reminder
-      if (_enableReminder && item.nextPaymentDate != null) {
-        final reminderDate = item.nextPaymentDate!.subtract(Duration(days: _reminderDaysBefore));
+      if (_enableReminder && item.nextActionDate != null) {
+        final reminderDate = item.nextActionDate!.subtract(Duration(days: _reminderDaysBefore));
         // Schedule it for 10 AM on the reminder day
         final scheduledTime = DateTime(reminderDate.year, reminderDate.month, reminderDate.day, 10, 0);
         
         await pushNotificationService.scheduleReminder(
           id: item.id.hashCode,
-          title: '${_selectedType == PortfolioType.debt ? 'Payment Due:' : 'Investment Reminder:'} ${item.name}',
+          title: '${_selectedType == PortfolioItemType.debt ? 'Payment Due:' : 'Investment Reminder:'} ${item.name}',
           body: 'Amount: ₹${item.amount.toStringAsFixed(0)} is due in $_reminderDaysBefore days.',
           scheduledDate: scheduledTime,
         );
@@ -163,7 +165,7 @@ class _AddPortfolioItemScreenState extends ConsumerState<AddPortfolioItemScreen>
             const SizedBox(height: AppDimensions.xxl),
 
             // Reminders (Only for debt/investment)
-            if (_selectedType != PortfolioType.asset) ...[
+            if (_selectedType != PortfolioItemType.asset) ...[
               Text('Schedule & Reminders', style: AppTextStyles.h3),
               const SizedBox(height: AppDimensions.md),
               GlassContainer(
