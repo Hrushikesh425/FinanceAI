@@ -43,9 +43,8 @@ class AuthService {
       if (googleUser == null) return null;
       
       final googleAuth = await googleUser.authentication;
-      final scopes = await _googleSignIn.requestScopes(['email', 'profile']);
       
-      // we just need the idToken for Firebase auth typically, but let's pass both if possible
+      // we just need the idToken for Firebase auth typically
       final credential = GoogleAuthProvider.credential(
         idToken: googleAuth.idToken,
       );
