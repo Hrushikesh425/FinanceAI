@@ -1,4 +1,4 @@
-package com.hrushikesh.finance_ai
+package com.hrushikesh.financeai
 
 import io.flutter.embedding.android.FlutterActivity
 
