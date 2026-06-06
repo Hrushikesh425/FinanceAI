@@ -22,14 +22,20 @@ void main() async {
     DeviceOrientation.portraitDown,
   ]);
 
-  // Initialize Firebase
+  // Initialize Firebase with robust error handling
   try {
-    if (!kIsWeb) {
-      await Firebase.initializeApp();
-    }
+    await Firebase.initializeApp();
+    debugPrint('✅ Firebase initialized successfully');
   } catch (e) {
-    debugPrint('Firebase initialization error: $e');
+    debugPrint('⚠️ Firebase initialization skipped: $e');
+    // App will continue without Firebase — services handle null gracefully
   }
+
+  // Catch any Flutter framework errors to prevent crashes
+  FlutterError.onError = (FlutterErrorDetails details) {
+    debugPrint('Flutter Error: ${details.exceptionAsString()}');
+    FlutterError.presentError(details);
+  };
 
   runApp(const ProviderScope(child: FinanceAIApp()));
 }
