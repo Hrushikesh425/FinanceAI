@@ -1,15 +1,14 @@
 import 'package:flutter/foundation.dart';
-import 'package:flutter_sms_inbox/flutter_sms_inbox.dart';
+import 'package:flutter/services.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:finance_ai/core/models/transaction.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class SmsParserService {
-  final SmsQuery _query = SmsQuery();
+  // Platform channel to read SMS via native Android ContentProvider
+  static const _channel = MethodChannel('com.hrushikesh.financeai/sms');
 
   // Regex for Indian UPI/Bank SMS formats
-  // Example: "Rs. 450.00 debited from a/c **1234 on 12-04-24 to Swiggy. Ref 410328"
-  // Example: "Sent Rs. 500 to Rahul via UPI"
   final _debitRegexes = [
     RegExp(r'(?:Rs\.?|INR)\s*([\d,]+\.?\d*)\s*(?:debited|deducted|spent|withdrawn)', caseSensitive: false),
     RegExp(r'(?:debited|deducted|spent|withdrawn).*?(?:Rs\.?|INR)\s*([\d,]+\.?\d*)', caseSensitive: false),
@@ -28,43 +27,53 @@ class SmsParserService {
         return [];
       }
 
-      // We only want to process SMS received since the last check
       final prefs = await SharedPreferences.getInstance();
-      final lastCheckTime = prefs.getInt('last_sms_check_time') ?? 
+      final lastCheckTime = prefs.getInt('last_sms_check_time') ??
           DateTime.now().subtract(const Duration(days: 3)).millisecondsSinceEpoch;
-          
-      final messages = await _query.querySms(
-        kinds: [SmsQueryKind.inbox],
-        count: 50,
-      );
+
+      // Read SMS from native Android via platform channel
+      List<Map<String, dynamic>> messages = [];
+      try {
+        final result = await _channel.invokeMethod<List>('getInboxSms', {
+          'count': 50,
+          'afterTimestamp': lastCheckTime,
+        });
+        if (result != null) {
+          messages = result.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+        }
+      } on MissingPluginException {
+        // Platform channel not implemented yet — return empty gracefully
+        debugPrint('SMS platform channel not implemented');
+        return [];
+      } on PlatformException catch (e) {
+        debugPrint('SMS platform channel error: ${e.message}');
+        return [];
+      }
 
       final newTransactions = <AppTransaction>[];
       final currentCheckTime = DateTime.now().millisecondsSinceEpoch;
 
       for (final msg in messages) {
-        if (msg.date == null || msg.body == null) continue;
-        
-        // Skip old messages
-        if (msg.date!.millisecondsSinceEpoch <= lastCheckTime) continue;
+        final body = (msg['body'] as String?) ?? '';
+        final sender = (msg['sender'] as String?) ?? '';
+        final timestamp = (msg['timestamp'] as int?) ?? 0;
 
-        final body = msg.body!.toLowerCase();
-        
-        // Only look at typical banking/UPI sender IDs (usually 6 letters like AD-HDFCBK)
-        // and ensure the message contains debit keywords
-        if (msg.sender != null && 
-            !msg.sender!.contains(RegExp(r'\d')) && 
-            (body.contains('debited') || body.contains('sent ') || body.contains('paid '))) {
-          
-          final tx = _parseMessage(msg.body!, msg.date!, userId);
-          if (tx != null) {
-            newTransactions.add(tx);
-          }
+        if (body.isEmpty || timestamp <= lastCheckTime) continue;
+
+        final date = DateTime.fromMillisecondsSinceEpoch(timestamp);
+        final lowerBody = body.toLowerCase();
+
+        // Only process banking/UPI senders
+        if (!sender.contains(RegExp(r'\d')) &&
+            (lowerBody.contains('debited') ||
+                lowerBody.contains('sent ') ||
+                lowerBody.contains('paid '))) {
+          final tx = _parseMessage(body, date, userId);
+          if (tx != null) newTransactions.add(tx);
         }
       }
 
-      // Update last check time
       await prefs.setInt('last_sms_check_time', currentCheckTime);
-      
       return newTransactions;
     } catch (e) {
       debugPrint('SMS parsing error: $e');
@@ -76,7 +85,6 @@ class SmsParserService {
     double? amount;
     String? merchant;
 
-    // Extract amount
     for (final regex in _debitRegexes) {
       final match = regex.firstMatch(body);
       if (match != null) {
@@ -88,12 +96,10 @@ class SmsParserService {
 
     if (amount == null) return null;
 
-    // Extract merchant
     for (final regex in _merchantRegexes) {
       final match = regex.firstMatch(body);
       if (match != null) {
         merchant = match.group(1)?.trim();
-        // Clean up common false positives
         if (merchant == 'your' || merchant == 'a/c' || merchant == 'account') {
           merchant = null;
           continue;
@@ -102,7 +108,6 @@ class SmsParserService {
       }
     }
 
-    // Default category mapping based on merchant name
     String category = 'Other';
     merchant = merchant?.toUpperCase() ?? 'UPI PAYMENT';
     if (merchant.contains('ZOMATO') || merchant.contains('SWIGGY') || merchant.contains('RESTAURANT')) category = 'Food';
@@ -114,7 +119,7 @@ class SmsParserService {
       id: 'sms_${date.millisecondsSinceEpoch}',
       userId: userId,
       title: merchant,
-      amount: -amount, // Expense
+      amount: -amount,
       type: TransactionType.expense,
       category: category,
       date: date,
