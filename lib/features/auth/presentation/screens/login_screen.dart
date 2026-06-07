@@ -86,7 +86,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     if (error.contains('invalid-email')) return 'Please enter a valid email address.';
     if (error.contains('network-request-failed')) return 'No internet connection. Please try again.';
     if (error.contains('too-many-requests')) return 'Too many attempts. Please wait a moment.';
-    return 'Login failed. Please try again.';
+    return error; // Return the actual exact error so we can debug it
   }
 
   @override

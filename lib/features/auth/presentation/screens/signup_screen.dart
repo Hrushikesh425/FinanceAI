@@ -57,7 +57,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
     if (error.contains('weak-password')) return 'Password too weak. Use 6+ characters.';
     if (error.contains('invalid-email')) return 'Please enter a valid email address.';
     if (error.contains('network-request-failed')) return 'No internet connection.';
-    return 'Signup failed. Please try again.';
+    return error; // Return the exact error for debugging
   }
 
   @override
