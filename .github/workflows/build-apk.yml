@@ -30,12 +30,12 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Print Keystore Fingerprints
-        run: |
-          keytool -list -v -keystore ~/.android/debug.keystore -alias androiddebugkey -storepass android -keypass android
-
       - name: Build APK
         run: flutter build apk --release
+
+      - name: Print Keystore Fingerprints
+        run: |
+          keytool -list -v -keystore ~/.android/debug.keystore -alias androiddebugkey -storepass android -keypass android || echo "Keystore not found!"
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
